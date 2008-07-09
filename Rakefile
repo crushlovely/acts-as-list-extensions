@@ -1,22 +1,48 @@
 require 'rake'
 require 'rake/testtask'
+require 'rake/clean'
+require 'rake/gempackagetask'
 require 'rake/rdoctask'
+require 'tools/rakehelp'
+require 'fileutils'
+include FileUtils
 
-desc 'Default: run unit tests.'
-task :default => :test
+setup_tests
+setup_clean ["pkg", "lib/*.bundle", "*.gem", ".config"]
 
-desc 'Test the acts_as_list_extensions plugin.'
-Rake::TestTask.new(:test) do |t|
-  t.libs << 'lib'
-  t.pattern = 'test/**/*_test.rb'
-  t.verbose = true
+setup_rdoc ['README', 'LICENSE', 'lib/**/*.rb', 'doc/**/*.rdoc']
+
+desc "Does a full compile, test run"
+task :default => [:test, :package]
+
+version="0.0.1"
+name="acts_as_list_extensions"
+
+setup_gem(name, version) do |spec|
+  spec.summary = "A tiny gem for DRY-ing up common sorting actions in controllers."
+  spec.description = spec.summary
+  spec.author="PJ Kelly"
+  spec.add_dependency('activerecord', '>= 1.2.0')
+  spec.has_rdoc = false
+  spec.files += Dir.glob("bin/*")
+  spec.files += Dir.glob("resources/**/*")
 end
 
-desc 'Generate documentation for the acts_as_list_extensions plugin.'
-Rake::RDocTask.new(:rdoc) do |rdoc|
-  rdoc.rdoc_dir = 'rdoc'
-  rdoc.title    = 'ActsAsListExtensions'
-  rdoc.options << '--line-numbers' << '--inline-source'
-  rdoc.rdoc_files.include('README')
-  rdoc.rdoc_files.include('lib/**/*.rb')
+
+task :install => [:test, :package] do
+  sh %{sudo gem install pkg/#{name}-#{version}.gem}
+end
+
+task :uninstall => [:clean] do
+  sh %{sudo gem uninstall #{name}}
+end
+
+task :gem_source do
+  mkdir_p "pkg/gems"
+
+  FileList["**/*.gem"].each { |gem| mv gem, "pkg/gems" }
+  FileList["pkg/*.tgz"].each {|tgz| rm tgz }
+  rm_rf "pkg/#{name}-#{version}"
+
+  sh %{ generate_yaml_index.rb -d pkg }
 end
